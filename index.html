@@ -116,6 +116,12 @@
     color: var(--text);
     cursor: pointer;
   }
+  select {
+    font: inherit; font-size: 0.92rem; padding: 7px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+    max-width: 100%;
+  }
+  #example-desc { margin: 10px 0 0; padding: 8px 12px; background: var(--accent-soft); border-radius: 8px; color: var(--text); }
   button:hover, .file-btn:hover { border-color: var(--accent); }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   .file-btn input { display: none; }
@@ -227,11 +233,13 @@
     <h2 id="in-title">輸入序列</h2>
     <textarea id="input" spellcheck="false" placeholder="貼上 DNA 序列或 FASTA 格式，例如：&#10;>my_gene&#10;ATGGCTAGCTAA..."></textarea>
     <div class="row">
+      <select id="example-pick" aria-label="選擇範例序列"><option value="demo">示範序列（自製，381 bp）</option><option value="egfp">EGFP 綠色螢光蛋白編碼序列（720 bp）</option><option value="m13">pUC19 的 M13 PCR 產物（103 bp）</option><option value="primer">M13 Forward（−20）定序引子（17 nt）</option><option value="rna">RNA 範例：EGFP mRNA 前 60 nt</option><option value="genbank">從 GenBank 網頁直接複製的格式</option></select>
       <button class="primary" id="btn-example" type="button">載入範例</button>
       <label class="file-btn">讀取檔案（.fasta / .txt）<input type="file" id="file" accept=".fa,.fasta,.fna,.txt,text/plain"></label>
       <button id="btn-clear" type="button">清除</button>
       <span class="meta" id="seq-meta"></span>
     </div>
+    <p class="meta" id="example-desc" hidden></p>
     <div class="notice" id="notice" role="status"></div>
   </section>
 
@@ -462,7 +470,7 @@ if (typeof module !== 'undefined') module.exports = DNA;
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const EXAMPLE = '>demo_sequence 示範用自製序列（含兩個 ORF 與數個限制酶切位）\nCCTGAATTCGGCATTCGCCAATGGACCGCTCATGAGCACTCGTTGGCGAGTACTGTTAAT\nCCTTTCTAAGATTAGCTCGTCTCCCAGACATAATAATTGGGTCTATTTCGGTAAGCTTGG\nCTATCAAGCGAGCCGGTGCGAATCGGGCTTGCTACTTAGCTGCGGGCGCTAAGGATCCTA\nGATGATAATCGAATTCCATGAGACTAAACAAAGCTTTGAACACCCCTTACATCACGCTAA\nAGTGGGACGAAGCCAGATATAATAACGACGGGTAAGCCCTTGGTTCAATCTTCTTAGCCT\nGGGATGGGAATGAGATCTATGAGGTATGTTGTTAGCACTGACCATCTCGAGCACAACCAC\nAAAGTGGTGTATTGAATTCAA';
+  const EXAMPLES = [{"id": "demo", "label": "示範序列（自製，381 bp）", "desc": "自製的示範序列，含兩個 ORF（+2 與 −1 讀碼框）和 EcoRI、BamHI、HindIII、XhoI 切位，適合快速看過所有功能。", "text": ">demo_sequence 示範用自製序列（含兩個 ORF 與數個限制酶切位）\nCCTGAATTCGGCATTCGCCAATGGACCGCTCATGAGCACTCGTTGGCGAGTACTGTTAAT\nCCTTTCTAAGATTAGCTCGTCTCCCAGACATAATAATTGGGTCTATTTCGGTAAGCTTGG\nCTATCAAGCGAGCCGGTGCGAATCGGGCTTGCTACTTAGCTGCGGGCGCTAAGGATCCTA\nGATGATAATCGAATTCCATGAGACTAAACAAAGCTTTGAACACCCCTTACATCACGCTAA\nAGTGGGACGAAGCCAGATATAATAACGACGGGTAAGCCCTTGGTTCAATCTTCTTAGCCT\nGGGATGGGAATGAGATCTATGAGGTATGTTGTTAGCACTGACCATCTCGAGCACAACCAC\nAAAGTGGTGTATTGAATTCAA"}, {"id": "egfp", "label": "EGFP 綠色螢光蛋白編碼序列（720 bp）", "desc": "增強型綠色螢光蛋白（EGFP）的完整編碼序列。來源：pEGFP-N1，GenBank U55762，第 679–1398 位。試試：「轉譯」分頁選 +1 會得到完整的 EGFP 蛋白質（239 aa，結尾是 *）；「ORF」分頁最長的就是它。", "text": ">EGFP CDS | pEGFP-N1 (GenBank U55762) 679..1398\nATGGTGAGCAAGGGCGAGGAGCTGTTCACCGGGGTGGTGCCCATCCTGGTCGAGCTGGAC\nGGCGACGTAAACGGCCACAAGTTCAGCGTGTCCGGCGAGGGCGAGGGCGATGCCACCTAC\nGGCAAGCTGACCCTGAAGTTCATCTGCACCACCGGCAAGCTGCCCGTGCCCTGGCCCACC\nCTCGTGACCACCCTGACCTACGGCGTGCAGTGCTTCAGCCGCTACCCCGACCACATGAAG\nCAGCACGACTTCTTCAAGTCCGCCATGCCCGAAGGCTACGTCCAGGAGCGCACCATCTTC\nTTCAAGGACGACGGCAACTACAAGACCCGCGCCGAGGTGAAGTTCGAGGGCGACACCCTG\nGTGAACCGCATCGAGCTGAAGGGCATCGACTTCAAGGAGGACGGCAACATCCTGGGGCAC\nAAGCTGGAGTACAACTACAACAGCCACAACGTCTATATCATGGCCGACAAGCAGAAGAAC\nGGCATCAAGGTGAACTTCAAGATCCGCCACAACATCGAGGACGGCAGCGTGCAGCTCGCC\nGACCACTACCAGCAGAACACCCCCATCGGCGACGGCCCCGTGCTGCTGCCCGACAACCAC\nTACCTGAGCACCCAGTCCGCCCTGAGCAAAGACCCCAACGAGAAGCGCGATCACATGGTC\nCTGCTGGAGTTCGTGACCGCCGCCGGGATCACTCTCGGCATGGACGAGCTGTACAAGTAA"}, {"id": "m13", "label": "pUC19 的 M13 PCR 產物（103 bp）", "desc": "用 M13 Forward（−20）與 M13 Reverse 引子從 pUC19 擴增出的片段，中間是多重選殖位點（MCS）。來源：pUC19，GenBank L09137，第 379–481 位。試試：「限制酶切位」分頁把 XbaI、PstI、SalI 也勾起來，可看到 MCS 上一連串的切位。", "text": ">pUC19 M13 amplicon | GenBank L09137 379..481\nGTAAAACGACGGCCAGTGAATTCGAGCTCGGTACCCGGGGATCCTCTAGAGTCGACCTGC\nAGGCATGCAAGCTTGGCGTAATCATGGTCATAGCTGTTTCCTG"}, {"id": "primer", "label": "M13 Forward（−20）定序引子（17 nt）", "desc": "最常用的定序引子之一。短序列適合看 GC% 與預估 Tm；可以把它貼到「自訂序列搜尋」，在 M13 PCR 產物範例中找到它的位置。", "text": ">M13 Forward (-20) primer\nGTAAAACGACGGCCAGT"}, {"id": "rna", "label": "RNA 範例：EGFP mRNA 前 60 nt", "desc": "含 U 的 RNA 序列，會自動轉成 DNA（U → T）並顯示提示。試試：「轉譯」分頁 +1 會得到 EGFP 的前 20 個胺基酸。", "text": ">EGFP mRNA 5' 60 nt\nAUGGUGAGCAAGGGCGAGGAGCUGUUCACCGGGGUGGUGCCCAUCCUGGUCGAGCUGGAC"}, {"id": "genbank", "label": "從 GenBank 網頁直接複製的格式", "desc": "模擬從 NCBI 網頁複製 ORIGIN 區塊的樣子：有行號、空白、小寫。工具會自動清掉數字與空白，得到 EGFP 的前 120 bp。", "text": "        1 atggtgagca agggcgagga gctgttcacc ggggtggtgc ccatcctggt cgagctggac\n       61 ggcgacgtaa acggccacaa gttcagcgtg tccggcgagg gcgagggcga tgccacctac"}];
 
   const state = { seq: '', frame: 1, selectedOrf: null, orfs: [], sites: [] };
   const enzymeChecked = new Set(['EcoRI', 'BamHI', 'HindIII', 'XhoI']);
@@ -667,16 +675,25 @@ if (typeof module !== 'undefined') module.exports = DNA;
 
   let timer;
   const debounced = () => { clearTimeout(timer); timer = setTimeout(update, 150); };
-  $('input').addEventListener('input', debounced);
+  $('input').addEventListener('input', () => { $('example-desc').hidden = true; debounced(); });
   $('motif').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { renderSites(); renderViewer(); }, 150); });
   $('minaa').addEventListener('input', () => { renderORFs(); renderViewer(); });
-  $('btn-example').addEventListener('click', () => { $('input').value = EXAMPLE; state.selectedOrf = null; update(); });
-  $('btn-clear').addEventListener('click', () => { $('input').value = ''; $('motif').value = ''; state.selectedOrf = null; update(); $('input').focus(); });
+  function loadExample() {
+    const ex = EXAMPLES.find(e => e.id === $('example-pick').value);
+    $('input').value = ex.text;
+    $('example-desc').textContent = '📌 ' + ex.desc;
+    $('example-desc').hidden = false;
+    state.selectedOrf = null;
+    update();
+  }
+  $('btn-example').addEventListener('click', loadExample);
+  $('example-pick').addEventListener('change', loadExample);
+  $('btn-clear').addEventListener('click', () => { $('example-desc').hidden = true; $('input').value = ''; $('motif').value = ''; state.selectedOrf = null; update(); $('input').focus(); });
   $('file').addEventListener('change', e => {
     const f = e.target.files[0];
     if (!f) return;
     const reader = new FileReader();
-    reader.onload = () => { $('input').value = reader.result; state.selectedOrf = null; update(); toast(`已載入 ${f.name}`); };
+    reader.onload = () => { $('example-desc').hidden = true; $('input').value = reader.result; state.selectedOrf = null; update(); toast(`已載入 ${f.name}`); };
     reader.readAsText(f);
     e.target.value = '';
   });
