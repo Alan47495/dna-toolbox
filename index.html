@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DNA 序列工具箱</title>
+<meta name="description" content="在瀏覽器內計算 GC%、反向互補、六框轉譯、ORF 與限制酶切位的 DNA 序列工具">
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --surface-2: #f0f2f5;
+    --border: #d9dde3;
+    --text: #1d232b;
+    --muted: #5d6673;
+    --accent: #2f6fdb;
+    --accent-soft: #e3ecfb;
+    --warn-bg: #fff4dc;
+    --warn-text: #7a5300;
+    --ok: #1f7a4d;
+    --base-a: #1f8a4c;
+    --base-t: #c0392b;
+    --base-g: #b07800;
+    --base-c: #2563c9;
+    --base-n: #7b8490;
+    --hl-orf: #ffe9a8;
+    --hl-site: #c9e7ff;
+    --hl-both: #e2d4ff;
+    --radius: 10px;
+    --mono: ui-monospace, "Cascadia Mono", "Consolas", "Menlo", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12161c;
+      --surface: #1a2029;
+      --surface-2: #222a35;
+      --border: #313b49;
+      --text: #e6eaf0;
+      --muted: #9aa5b4;
+      --accent: #6fa2ff;
+      --accent-soft: #1f2f4d;
+      --warn-bg: #3a2f14;
+      --warn-text: #f3cf7a;
+      --ok: #5fd39a;
+      --base-a: #5fd39a;
+      --base-t: #ff8a7a;
+      --base-g: #f2c14e;
+      --base-c: #7fb0ff;
+      --base-n: #8c96a3;
+      --hl-orf: #5a4a12;
+      --hl-site: #163f5e;
+      --hl-both: #3d2c66;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161c;
+    --surface: #1a2029;
+    --surface-2: #222a35;
+    --border: #313b49;
+    --text: #e6eaf0;
+    --muted: #9aa5b4;
+    --accent: #6fa2ff;
+    --accent-soft: #1f2f4d;
+    --warn-bg: #3a2f14;
+    --warn-text: #f3cf7a;
+    --ok: #5fd39a;
+    --base-a: #5fd39a;
+    --base-t: #ff8a7a;
+    --base-g: #f2c14e;
+    --base-c: #7fb0ff;
+    --base-n: #8c96a3;
+    --hl-orf: #5a4a12;
+    --hl-site: #163f5e;
+    --hl-both: #3d2c66;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
+  header h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  header p { margin: 0; color: var(--muted); }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-top: 16px;
+  }
+  .card h2 { font-size: 1.05rem; margin: 0 0 12px; }
+  textarea, input[type="text"] {
+    width: 100%;
+    font-family: var(--mono);
+    font-size: 0.92rem;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+  }
+  textarea { min-height: 130px; resize: vertical; }
+  textarea:focus, input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  button, .file-btn {
+    font: inherit;
+    font-size: 0.92rem;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button:hover, .file-btn:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .file-btn input { display: none; }
+  .meta { color: var(--muted); font-size: 0.9rem; }
+  .notice {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--warn-bg);
+    color: var(--warn-text);
+    font-size: 0.9rem;
+  }
+  .notice:empty { display: none; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+  .tabs button[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .panel { padding-top: 14px; }
+  .panel[hidden] { display: none; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .stat { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
+  .stat .label { font-size: 0.82rem; color: var(--muted); }
+  .stat .value { font-size: 1.35rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .bars { margin-top: 14px; display: grid; gap: 6px; }
+  .bar-row { display: grid; grid-template-columns: 28px 1fr 120px; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+  .bar-track { height: 14px; background: var(--surface-2); border-radius: 7px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 7px; transition: width .2s; }
+  .bar-row .n { text-align: right; font-size: 0.88rem; color: var(--muted); }
+  .out-block { margin-bottom: 14px; }
+  .out-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .out-head strong { font-size: 0.95rem; }
+  pre.seq {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 0.88rem;
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 10px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 220px;
+    overflow: auto;
+  }
+  .frame-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .frame-pick button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 0.82rem; }
+  td.num { font-variant-numeric: tabular-nums; }
+  td.mono { font-family: var(--mono); font-size: 0.82rem; word-break: break-all; }
+  tbody tr.clickable { cursor: pointer; }
+  tbody tr.clickable:hover { background: var(--surface-2); }
+  tbody tr.selected { background: var(--accent-soft); }
+  .table-wrap { overflow-x: auto; }
+  .slider { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .slider input { width: 220px; max-width: 100%; }
+  .enzymes { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 12px; }
+  .enzymes label { font-size: 0.9rem; white-space: nowrap; }
+  .enzymes code, .mono-inline { font-family: var(--mono); font-size: 0.82rem; color: var(--muted); }
+  .viewer {
+    font-family: var(--mono);
+    font-size: 0.88rem;
+    line-height: 1.75;
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 10px 12px;
+    max-height: 420px;
+    overflow: auto;
+  }
+  .vline { white-space: nowrap; }
+  .vpos { display: inline-block; min-width: 6ch; color: var(--muted); text-align: right; margin-right: 1.2ch; user-select: none; }
+  .vgrp { margin-right: 1ch; }
+  .colored .bA { color: var(--base-a); }
+  .colored .bT { color: var(--base-t); }
+  .colored .bG { color: var(--base-g); }
+  .colored .bC { color: var(--base-c); }
+  .bN { color: var(--base-n); }
+  .h-orf { background: var(--hl-orf); }
+  .h-site { background: var(--hl-site); }
+  .h-orf.h-site { background: var(--hl-both); }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; align-items: center; }
+  .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+  .empty { color: var(--muted); font-size: 0.92rem; }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: var(--text); color: var(--bg);
+    padding: 8px 16px; border-radius: 8px; font-size: 0.9rem;
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .toast.show { opacity: 1; }
+  footer { margin-top: 24px; color: var(--muted); font-size: 0.85rem; text-align: center; }
+  @media (max-width: 600px) {
+    header h1 { font-size: 1.35rem; }
+    .bar-row { grid-template-columns: 24px 1fr 96px; }
+    .viewer { font-size: 0.8rem; }
+    .vpos { min-width: 5ch; margin-right: .8ch; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🧬 DNA 序列工具箱</h1>
+    <p>貼上序列即可即時計算 GC%、反向互補、六框轉譯、ORF 與限制酶切位。所有計算都在你的瀏覽器內完成，不會上傳序列。</p>
+  </header>
+
+  <section class="card" aria-labelledby="in-title">
+    <h2 id="in-title">輸入序列</h2>
+    <textarea id="input" spellcheck="false" placeholder="貼上 DNA 序列或 FASTA 格式，例如：&#10;>my_gene&#10;ATGGCTAGCTAA..."></textarea>
+    <div class="row">
+      <button class="primary" id="btn-example" type="button">載入範例</button>
+      <label class="file-btn">讀取檔案（.fasta / .txt）<input type="file" id="file" accept=".fa,.fasta,.fna,.txt,text/plain"></label>
+      <button id="btn-clear" type="button">清除</button>
+      <span class="meta" id="seq-meta"></span>
+    </div>
+    <div class="notice" id="notice" role="status"></div>
+  </section>
+
+  <section class="card" aria-label="分析結果">
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" aria-controls="p-stats" id="t-stats" type="button">統計</button>
+      <button role="tab" aria-selected="false" aria-controls="p-trans" id="t-trans" type="button">反向互補</button>
+      <button role="tab" aria-selected="false" aria-controls="p-prot" id="t-prot" type="button">轉譯</button>
+      <button role="tab" aria-selected="false" aria-controls="p-orf" id="t-orf" type="button">ORF</button>
+      <button role="tab" aria-selected="false" aria-controls="p-site" id="t-site" type="button">限制酶切位</button>
+    </div>
+
+    <div class="panel" id="p-stats" role="tabpanel" aria-labelledby="t-stats">
+      <div class="stats">
+        <div class="stat"><div class="label">長度</div><div class="value" id="s-len">—</div></div>
+        <div class="stat"><div class="label">GC 含量</div><div class="value" id="s-gc">—</div></div>
+        <div class="stat"><div class="label">預估 Tm</div><div class="value" id="s-tm">—</div></div>
+        <div class="stat"><div class="label">ORF 數（≥ 最短長度）</div><div class="value" id="s-orf">—</div></div>
+      </div>
+      <div class="bars" id="bars"></div>
+      <p class="meta" id="tm-note"></p>
+    </div>
+
+    <div class="panel" id="p-trans" role="tabpanel" aria-labelledby="t-trans" hidden>
+      <div class="out-block">
+        <div class="out-head"><strong>反向互補 Reverse complement（5'→3'）</strong><button type="button" data-copy="o-rc">複製</button></div>
+        <pre class="seq" id="o-rc"></pre>
+      </div>
+      <div class="out-block">
+        <div class="out-head"><strong>互補 Complement（3'→5'）</strong><button type="button" data-copy="o-comp">複製</button></div>
+        <pre class="seq" id="o-comp"></pre>
+      </div>
+      <div class="out-block">
+        <div class="out-head"><strong>反向 Reverse</strong><button type="button" data-copy="o-rev">複製</button></div>
+        <pre class="seq" id="o-rev"></pre>
+      </div>
+    </div>
+
+    <div class="panel" id="p-prot" role="tabpanel" aria-labelledby="t-prot" hidden>
+      <div class="frame-pick" id="frame-pick" aria-label="選擇讀碼框"></div>
+      <div class="out-block">
+        <div class="out-head"><strong id="prot-title">讀碼框 +1</strong><button type="button" data-copy="o-prot">複製</button></div>
+        <pre class="seq" id="o-prot"></pre>
+      </div>
+      <p class="meta">標準遺傳密碼表；<span class="mono-inline">*</span> 為終止密碼子，<span class="mono-inline">X</span> 為含 N 的密碼子。−1 到 −3 為反向互補股的讀碼框。</p>
+    </div>
+
+    <div class="panel" id="p-orf" role="tabpanel" aria-labelledby="t-orf" hidden>
+      <div class="slider">
+        <label for="minaa">最短長度</label>
+        <input type="range" id="minaa" min="10" max="300" step="5" value="30">
+        <span id="minaa-val" class="meta">30 aa</span>
+      </div>
+      <p class="meta">ORF 定義：ATG 起始，到同一讀碼框的第一個終止密碼子（TAA / TAG / TGA）為止，搜尋六個讀碼框。點選任一列可在下方序列檢視器中標示。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>讀碼框</th><th>起點</th><th>終點</th><th>長度</th><th>蛋白質序列（前 20 aa）</th></tr></thead>
+          <tbody id="orf-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="p-site" role="tabpanel" aria-labelledby="t-site" hidden>
+      <div class="enzymes" id="enzymes"></div>
+      <div class="row" style="margin-top:0;margin-bottom:12px">
+        <input type="text" id="motif" placeholder="自訂序列搜尋，例如 TATAAA（同時搜尋兩股）" spellcheck="false" style="flex:1;min-width:200px">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>名稱</th><th>辨識序列</th><th>切位數</th><th>位置（正股座標，1-based）</th></tr></thead>
+          <tbody id="site-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="v-title">
+    <h2 id="v-title">序列檢視器</h2>
+    <div class="legend">
+      <label><input type="checkbox" id="color-toggle" checked> 鹼基上色</label>
+      <span><span class="swatch" style="background:var(--hl-orf)"></span>選取的 ORF</span>
+      <span><span class="swatch" style="background:var(--hl-site)"></span>切位 / 搜尋結果</span>
+      <span><span class="swatch" style="background:var(--hl-both)"></span>兩者重疊</span>
+    </div>
+    <div class="viewer colored" id="viewer"><span class="empty">尚未輸入序列。</span></div>
+  </section>
+
+  <footer>DNA 序列工具箱 · 單一 HTML 檔，不使用外部函式庫 · 所有計算在本機瀏覽器完成</footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- 核心計算：純函式，不碰 DOM，方便單獨測試 -->
+<script id="core">
+const DNA = (() => {
+  const COMP = { A: 'T', T: 'A', G: 'C', C: 'G', N: 'N' };
+
+  // 標準遺傳密碼表，依 TCAG 順序排列
+  const BASES = 'TCAG';
+  const AA = 'FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG';
+  const CODON = {};
+  let k = 0;
+  for (const a of BASES) for (const b of BASES) for (const c of BASES) CODON[a + b + c] = AA[k++];
+
+  const ENZYMES = [
+    { name: 'EcoRI', site: 'GAATTC' },
+    { name: 'BamHI', site: 'GGATCC' },
+    { name: 'HindIII', site: 'AAGCTT' },
+    { name: 'XhoI', site: 'CTCGAG' },
+    { name: 'NotI', site: 'GCGGCCGC' },
+    { name: 'XbaI', site: 'TCTAGA' },
+    { name: 'PstI', site: 'CTGCAG' },
+    { name: 'SalI', site: 'GTCGAC' },
+  ];
+
+  // 解析輸入：處理 FASTA 標題、空白、數字、小寫、RNA 的 U
+  function parse(text) {
+    let name = '';
+    const body = [];
+    for (const line of String(text).split(/\r?\n/)) {
+      const t = line.trim();
+      if (t.startsWith('>')) { if (!name) name = t.slice(1).trim(); continue; }
+      body.push(t);
+    }
+    let raw = body.join('').toUpperCase().replace(/[\s\d]/g, '');
+    const hadU = /U/.test(raw);
+    raw = raw.replace(/U/g, 'T');
+    const invalid = raw.replace(/[ACGTN]/g, '');
+    const seq = raw.replace(/[^ACGTN]/g, '');
+    return { name, seq, hadU, invalidCount: invalid.length, invalidChars: [...new Set(invalid)].join('') };
+  }
+
+  const reverse = s => s.split('').reverse().join('');
+  const complement = s => s.replace(/[ACGTN]/g, b => COMP[b]);
+  const revcomp = s => reverse(complement(s));
+
+  function counts(s) {
+    const c = { A: 0, T: 0, G: 0, C: 0, N: 0 };
+    for (const b of s) c[b]++;
+    return c;
+  }
+
+  function gcPercent(s) {
+    const c = counts(s);
+    const acgt = c.A + c.T + c.G + c.C;
+    return acgt ? (c.G + c.C) / acgt * 100 : 0;
+  }
+
+  // 預估 Tm：<14 nt 用 Wallace rule，其餘用基本 GC 公式
+  function tm(s) {
+    const c = counts(s);
+    const at = c.A + c.T, gc = c.G + c.C, n = at + gc;
+    if (n === 0) return null;
+    if (n < 14) return { value: 2 * at + 4 * gc, formula: 'Wallace rule：Tm = 2×(A+T) + 4×(G+C)' };
+    return { value: 64.9 + 41 * (gc - 16.4) / n, formula: 'Tm = 64.9 + 41×(G+C−16.4) / N' };
+  }
+
+  function translateRaw(s) {
+    let p = '';
+    for (let i = 0; i + 3 <= s.length; i += 3) {
+      const cod = s.slice(i, i + 3);
+      p += CODON[cod] || 'X';
+    }
+    return p;
+  }
+
+  // frame：1、2、3 為正股；-1、-2、-3 為反向互補股
+  function translate(s, frame) {
+    const strand = frame > 0 ? s : revcomp(s);
+    return translateRaw(strand.slice(Math.abs(frame) - 1));
+  }
+
+  // 在六個讀碼框中找 ORF（ATG 到第一個同框終止密碼子），座標換算回正股、1-based
+  function findORFs(s, minAA) {
+    const L = s.length;
+    const rc = revcomp(s);
+    const out = [];
+    for (const frame of [1, 2, 3, -1, -2, -3]) {
+      const strand = frame > 0 ? s : rc;
+      const off = Math.abs(frame) - 1;
+      let start = -1;
+      for (let i = off; i + 3 <= L; i += 3) {
+        const cod = strand.slice(i, i + 3);
+        if (start < 0 && cod === 'ATG') start = i;
+        else if (start >= 0 && (cod === 'TAA' || cod === 'TAG' || cod === 'TGA')) {
+          const aaLen = (i - start) / 3;
+          if (aaLen >= minAA) {
+            const sEnd = i + 2; // 含終止密碼子，strand 上的 0-based 結尾
+            let from, to;
+            if (frame > 0) { from = start + 1; to = sEnd + 1; }
+            else { from = L - sEnd; to = L - start; }
+            out.push({ frame, from, to, aaLen, protein: translateRaw(strand.slice(start, i)) });
+          }
+          start = -1;
+        }
+      }
+    }
+    out.sort((a, b) => b.aaLen - a.aaLen || a.from - b.from);
+    return out;
+  }
+
+  // 搜尋 motif（含重疊），同時找正股與反向互補股；回傳正股上的 1-based 起點
+  function findMotif(s, motif) {
+    const m = parse(motif).seq.replace(/N/g, '');
+    if (!m) return [];
+    const hits = new Map();
+    const scan = (pat, strand) => {
+      let i = s.indexOf(pat);
+      while (i !== -1) {
+        const key = i + 1;
+        if (!hits.has(key)) hits.set(key, { pos: key, len: pat.length, strand });
+        else if (hits.get(key).strand !== strand) hits.get(key).strand = '±';
+        i = s.indexOf(pat, i + 1);
+      }
+    };
+    scan(m, '+');
+    const r = revcomp(m);
+    if (r !== m) scan(r, '−');
+    else for (const h of hits.values()) h.strand = '±';
+    return [...hits.values()].sort((a, b) => a.pos - b.pos);
+  }
+
+  return { parse, reverse, complement, revcomp, counts, gcPercent, tm, translate, findORFs, findMotif, CODON, ENZYMES };
+})();
+if (typeof module !== 'undefined') module.exports = DNA;
+</script>
+
+<!-- 介面 -->
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const EXAMPLE = '>demo_sequence 示範用自製序列（含兩個 ORF 與數個限制酶切位）\nCCTGAATTCGGCATTCGCCAATGGACCGCTCATGAGCACTCGTTGGCGAGTACTGTTAAT\nCCTTTCTAAGATTAGCTCGTCTCCCAGACATAATAATTGGGTCTATTTCGGTAAGCTTGG\nCTATCAAGCGAGCCGGTGCGAATCGGGCTTGCTACTTAGCTGCGGGCGCTAAGGATCCTA\nGATGATAATCGAATTCCATGAGACTAAACAAAGCTTTGAACACCCCTTACATCACGCTAA\nAGTGGGACGAAGCCAGATATAATAACGACGGGTAAGCCCTTGGTTCAATCTTCTTAGCCT\nGGGATGGGAATGAGATCTATGAGGTATGTTGTTAGCACTGACCATCTCGAGCACAACCAC\nAAAGTGGTGTATTGAATTCAA';
+
+  const state = { seq: '', frame: 1, selectedOrf: null, orfs: [], sites: [] };
+  const enzymeChecked = new Set(['EcoRI', 'BamHI', 'HindIII', 'XhoI']);
+
+  const group = (s, size, perLine) => {
+    const parts = [];
+    for (let i = 0; i < s.length; i += size) parts.push(s.slice(i, i + size));
+    const lines = [];
+    for (let i = 0; i < parts.length; i += perLine) lines.push(parts.slice(i, i + perLine).join(' '));
+    return lines.join('\n');
+  };
+  const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const frameLabel = f => (f > 0 ? '+' : '−') + Math.abs(f);
+
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => t.classList.remove('show'), 1400);
+  }
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove();
+    }
+    toast('已複製到剪貼簿');
+  }
+
+  // ---- 分頁 ----
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  tabs.forEach(tab => tab.addEventListener('click', () => {
+    tabs.forEach(t => {
+      const on = t === tab;
+      t.setAttribute('aria-selected', on);
+      $(t.getAttribute('aria-controls')).hidden = !on;
+    });
+  }));
+
+  // ---- 讀碼框按鈕 ----
+  const fp = $('frame-pick');
+  [1, 2, 3, -1, -2, -3].forEach(f => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = frameLabel(f); b.dataset.frame = f;
+    b.setAttribute('aria-pressed', f === 1);
+    b.addEventListener('click', () => { state.frame = f; renderProtein(); });
+    fp.appendChild(b);
+  });
+
+  // ---- 限制酶勾選 ----
+  DNA.ENZYMES.forEach(e => {
+    const lab = document.createElement('label');
+    lab.innerHTML = `<input type="checkbox" value="${e.name}" ${enzymeChecked.has(e.name) ? 'checked' : ''}> ${e.name} <code>${e.site}</code>`;
+    lab.querySelector('input').addEventListener('change', ev => {
+      ev.target.checked ? enzymeChecked.add(e.name) : enzymeChecked.delete(e.name);
+      renderSites(); renderViewer();
+    });
+    $('enzymes').appendChild(lab);
+  });
+
+  // ---- 渲染 ----
+  function renderStats() {
+    const s = state.seq, c = DNA.counts(s), L = s.length;
+    $('s-len').textContent = L ? L.toLocaleString() + ' bp' : '—';
+    $('s-gc').textContent = L ? DNA.gcPercent(s).toFixed(1) + '%' : '—';
+    const t = DNA.tm(s);
+    $('s-tm').textContent = t ? t.value.toFixed(1) + ' °C' : '—';
+    $('tm-note').textContent = t ? `Tm 僅為粗估，供設計引子參考；使用公式：${t.formula}，N 為 A/T/G/C 總數。` : '';
+    const colors = { A: 'var(--base-a)', T: 'var(--base-t)', G: 'var(--base-g)', C: 'var(--base-c)', N: 'var(--base-n)' };
+    $('bars').innerHTML = L ? ['A', 'T', 'G', 'C', 'N'].map(b => {
+      const pct = c[b] / L * 100;
+      return `<div class="bar-row"><strong style="color:${colors[b]}">${b}</strong>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${colors[b]}"></div></div>
+        <span class="n">${c[b].toLocaleString()}（${pct.toFixed(1)}%）</span></div>`;
+    }).join('') : '';
+  }
+
+  function renderTransforms() {
+    const s = state.seq;
+    $('o-rc').textContent = group(DNA.revcomp(s), 10, 6);
+    $('o-comp').textContent = group(DNA.complement(s), 10, 6);
+    $('o-rev').textContent = group(DNA.reverse(s), 10, 6);
+  }
+
+  function renderProtein() {
+    [...fp.children].forEach(b => b.setAttribute('aria-pressed', Number(b.dataset.frame) === state.frame));
+    $('prot-title').textContent = `讀碼框 ${frameLabel(state.frame)}`;
+    const p = state.seq ? DNA.translate(state.seq, state.frame) : '';
+    $('o-prot').textContent = p ? group(p, 10, 6) : '';
+  }
+
+  function renderORFs() {
+    const minAA = Number($('minaa').value);
+    $('minaa-val').textContent = minAA + ' aa';
+    state.orfs = state.seq ? DNA.findORFs(state.seq, minAA) : [];
+    if (state.selectedOrf && !state.orfs.some(o => sameOrf(o, state.selectedOrf))) state.selectedOrf = null;
+    $('s-orf').textContent = state.seq ? state.orfs.length : '—';
+    const body = $('orf-body');
+    if (!state.seq) { body.innerHTML = `<tr><td colspan="6" class="empty">尚未輸入序列。</td></tr>`; return; }
+    if (!state.orfs.length) { body.innerHTML = `<tr><td colspan="6" class="empty">沒有長度 ≥ ${minAA} aa 的 ORF，可以把最短長度調低試試。</td></tr>`; return; }
+    body.innerHTML = state.orfs.map((o, i) => `<tr class="clickable${state.selectedOrf && sameOrf(o, state.selectedOrf) ? ' selected' : ''}" data-i="${i}" tabindex="0">
+      <td class="num">${i + 1}</td><td>${frameLabel(o.frame)}</td><td class="num">${o.from.toLocaleString()}</td>
+      <td class="num">${o.to.toLocaleString()}</td><td class="num">${o.aaLen} aa</td>
+      <td class="mono">${o.protein.slice(0, 20)}${o.protein.length > 20 ? '…' : ''}</td></tr>`).join('');
+  }
+  const sameOrf = (a, b) => a.frame === b.frame && a.from === b.from && a.to === b.to;
+
+  function selectOrf(i) {
+    const o = state.orfs[i];
+    state.selectedOrf = state.selectedOrf && sameOrf(o, state.selectedOrf) ? null : o;
+    renderORFs(); renderViewer();
+    if (state.selectedOrf) {
+      const el = document.querySelector(`#viewer [data-p="${o.from}"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast(`已標示 ORF：${frameLabel(o.frame)} ${o.from}–${o.to}`);
+    }
+  }
+  $('orf-body').addEventListener('click', e => { const tr = e.target.closest('tr[data-i]'); if (tr) selectOrf(Number(tr.dataset.i)); });
+  $('orf-body').addEventListener('keydown', e => { const tr = e.target.closest('tr[data-i]'); if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); selectOrf(Number(tr.dataset.i)); } });
+
+  function renderSites() {
+    const s = state.seq;
+    const rows = [];
+    state.sites = [];
+    const add = (name, site) => {
+      const hits = s ? DNA.findMotif(s, site) : [];
+      hits.forEach(h => state.sites.push({ ...h, name }));
+      rows.push(`<tr><td>${esc(name)}</td><td class="mono">${esc(site)}</td><td class="num">${hits.length}</td>
+        <td class="mono">${hits.length ? hits.map(h => h.pos + (h.strand === '±' ? '' : `(${h.strand})`)).join(', ') : '—'}</td></tr>`);
+    };
+    DNA.ENZYMES.filter(e => enzymeChecked.has(e.name)).forEach(e => add(e.name, e.site));
+    const motif = DNA.parse($('motif').value).seq;
+    if (motif) add('自訂搜尋', motif);
+    $('site-body').innerHTML = rows.length ? rows.join('') : `<tr><td colspan="4" class="empty">請勾選限制酶或輸入要搜尋的序列。</td></tr>`;
+  }
+
+  // 依檢視器寬度決定每行幾個 bp（10 的倍數，最多 60），手機上就不用左右滑
+  function basesPerLine() {
+    const v = $('viewer');
+    const probe = document.createElement('span');
+    probe.textContent = 'ACGTACGTAC';
+    probe.style.visibility = 'hidden';
+    v.appendChild(probe);
+    const charW = probe.getBoundingClientRect().width / 10 || 8;
+    probe.remove();
+    const cs = getComputedStyle(v);
+    const usable = v.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - charW * 8; // 扣掉位置編號欄
+    const groups = Math.floor(usable / (charW * 11)); // 每組 10 個鹼基 + 1 個空格
+    return Math.max(1, Math.min(6, groups)) * 10;
+  }
+
+  function renderViewer() {
+    const s = state.seq, v = $('viewer');
+    if (!s) { v.innerHTML = '<span class="empty">尚未輸入序列。</span>'; return; }
+    const L = s.length;
+    const orfMark = new Uint8Array(L);
+    const siteName = new Array(L);
+    if (state.selectedOrf) for (let i = state.selectedOrf.from - 1; i < state.selectedOrf.to; i++) orfMark[i] = 1;
+    for (const h of state.sites) for (let i = h.pos - 1; i < h.pos - 1 + h.len && i < L; i++) siteName[i] = siteName[i] ? siteName[i] + '、' + h.name : h.name;
+    const per = basesPerLine();
+    const out = [];
+    for (let line = 0; line < L; line += per) {
+      let html = `<div class="vline"><span class="vpos">${line + 1}</span>`;
+      for (let g = line; g < Math.min(line + per, L); g += 10) {
+        html += '<span class="vgrp">';
+        for (let i = g; i < Math.min(g + 10, L); i++) {
+          const b = s[i];
+          let cls = 'b' + b;
+          if (orfMark[i]) cls += ' h-orf';
+          if (siteName[i]) cls += ' h-site';
+          html += `<span class="${cls}" data-p="${i + 1}"${siteName[i] ? ` title="${esc(siteName[i])}，位置 ${i + 1}"` : ''}>${b}</span>`;
+        }
+        html += '</span>';
+      }
+      out.push(html + '</div>');
+    }
+    v.innerHTML = out.join('');
+  }
+
+  $('color-toggle').addEventListener('change', e => $('viewer').classList.toggle('colored', e.target.checked));
+  let lastPer = 0, resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { const p = basesPerLine(); if (p !== lastPer) { lastPer = p; renderViewer(); } }, 200);
+  });
+
+  // ---- 主流程 ----
+  function update() {
+    const r = DNA.parse($('input').value);
+    state.seq = r.seq;
+    const notes = [];
+    if (r.hadU) notes.push('偵測到 U，已將 RNA 轉為 DNA（U → T）。');
+    if (r.invalidCount) notes.push(`有 ${r.invalidCount} 個不合法字元（${esc(r.invalidChars)}）未計入，只保留 A/T/G/C/N。`);
+    $('notice').innerHTML = notes.join('<br>');
+    $('seq-meta').textContent = r.seq ? `${r.name ? '「' + r.name + '」 · ' : ''}${r.seq.length.toLocaleString()} bp` : '';
+    renderStats(); renderTransforms(); renderProtein(); renderORFs(); renderSites(); renderViewer();
+  }
+
+  let timer;
+  const debounced = () => { clearTimeout(timer); timer = setTimeout(update, 150); };
+  $('input').addEventListener('input', debounced);
+  $('motif').addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { renderSites(); renderViewer(); }, 150); });
+  $('minaa').addEventListener('input', () => { renderORFs(); renderViewer(); });
+  $('btn-example').addEventListener('click', () => { $('input').value = EXAMPLE; state.selectedOrf = null; update(); });
+  $('btn-clear').addEventListener('click', () => { $('input').value = ''; $('motif').value = ''; state.selectedOrf = null; update(); $('input').focus(); });
+  $('file').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => { $('input').value = reader.result; state.selectedOrf = null; update(); toast(`已載入 ${f.name}`); };
+    reader.readAsText(f);
+    e.target.value = '';
+  });
+  document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', () => {
+    const text = $(b.dataset.copy).textContent.replace(/\s/g, '');
+    if (text) copyText(text); else toast('沒有可複製的內容');
+  }));
+
+  update();
+})();
+</script>
+</body>
+</html>
